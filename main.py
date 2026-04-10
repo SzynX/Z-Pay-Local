@@ -15,25 +15,33 @@ class ZPayApp(ctk.CTk):
         super().__init__()
 
         # Ablak alapbeállításai
-        self.title("Z-Pay Local v1.1 - Secure practice platform")
+        self.title("Z-Pay Local v1.2 - Stable Edition")
         self.geometry("1000x650")
 
         # Backend példányosítás
         self.ledger = Ledger()
-        self.current_user = None  # Itt tároljuk a feloldott kulcsokat a memóriában
+        self.current_user = None  # Feloldott kulcsok a memóriában
 
-        # Rácsszerkezet kialakítása (0. oszlop: menü, 1. oszlop: tartalom)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        # UI elemek referenciái a későbbi takarításhoz
+        self.sidebar = None
+        self.content_area = None
+        self.auth_frame = None
 
         self.setup_initial_view()
 
     def setup_initial_view(self):
-        """Eldönti, hogy regisztráció vagy bejelentkezés ablakot mutasson."""
+        """Kezdeti nézet felépítése (Login vagy Register)."""
+        self.clear_all_widgets()
+
+        # Rácsszerkezet alaphelyzetbe állítása (fontos a tiszta váltáshoz)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=0)
+        self.grid_rowconfigure(0, weight=1)
+
         if os.path.exists("wallet.json"):
             self.show_auth_screen("Bejelentkezés", "Oldja fel a tárcáját a jelszavával.", self.unlock_wallet)
         else:
-            self.show_auth_screen("Új Tárca Létrehozása", "Adjon meg egy erős mester jelszót a tárca védelméhez.",
+            self.show_auth_screen("Új Tárca Létrehozása", "Adjon meg egy jelszót a tárca védelméhez.",
                                   self.create_wallet)
 
     def show_auth_screen(self, title, subtitle, action_func):
@@ -61,14 +69,12 @@ class ZPayApp(ctk.CTk):
             self.status_label.configure(text="A jelszónak legalább 4 karakternek kell lennie!")
             return
 
-        # Kulcsgenerálás és helyi titkosítás
         priv, pub = CryptoEngine.generate_keypair()
         enc_priv = CryptoEngine.encrypt_private_key(priv, pwd)
 
         with open("wallet.json", "w") as f:
             json.dump({"address": pub, "vault": enc_priv}, f)
 
-        self.auth_frame.destroy()
         self.setup_initial_view()
 
     def unlock_wallet(self):
@@ -84,33 +90,30 @@ class ZPayApp(ctk.CTk):
                 self.build_main_interface()
             else:
                 self.status_label.configure(text="Hibás jelszó! Próbálja újra.")
-        except Exception as e:
-            self.status_label.configure(text="Hiba a fájl beolvasásakor.")
+        except Exception:
+            self.status_label.configure(text="Hiba a pénztárca fájl beolvasásakor.")
 
     # --- FŐ INTERFÉSZ ---
 
     def build_main_interface(self):
+        # Ablak rácsának újraosztása a Sidebar-hoz
+        self.grid_columnconfigure(0, weight=0)  # Sidebar fix
+        self.grid_columnconfigure(1, weight=1)  # Tartalom nyúlik
+
         # OLDALSÁV (SIDEBAR)
         self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(4, weight=1)  # Rugalmas köz a gombok és a kilépés között
+        self.sidebar.grid_rowconfigure(4, weight=1)
 
         ctk.CTkLabel(self.sidebar, text="Z-PAY", font=("Arial", 28, "bold"), text_color="#3B8ED0").pack(pady=30)
 
-        # Menü gombok
-        self.btn_dash = ctk.CTkButton(self.sidebar, text="Irányítópult", fg_color="transparent", anchor="w",
-                                      command=self.draw_dashboard)
-        self.btn_dash.pack(fill="x", padx=20, pady=5)
+        ctk.CTkButton(self.sidebar, text="Irányítópult", fg_color="transparent", anchor="w",
+                      command=self.draw_dashboard).pack(fill="x", padx=20, pady=5)
+        ctk.CTkButton(self.sidebar, text="Pénz küldése", fg_color="transparent", anchor="w",
+                      command=self.draw_send).pack(fill="x", padx=20, pady=5)
+        ctk.CTkButton(self.sidebar, text="Előzmények", fg_color="transparent", anchor="w",
+                      command=self.draw_history).pack(fill="x", padx=20, pady=5)
 
-        self.btn_send = ctk.CTkButton(self.sidebar, text="Pénz küldése", fg_color="transparent", anchor="w",
-                                      command=self.draw_send)
-        self.btn_send.pack(fill="x", padx=20, pady=5)
-
-        self.btn_hist = ctk.CTkButton(self.sidebar, text="Előzmények", fg_color="transparent", anchor="w",
-                                      command=self.draw_history)
-        self.btn_hist.pack(fill="x", padx=20, pady=5)
-
-        # Kilépés gomb alul
         ctk.CTkButton(self.sidebar, text="Kijelentkezés", fg_color="#333", command=self.logout).pack(side="bottom",
                                                                                                      fill="x", padx=20,
                                                                                                      pady=20)
@@ -125,7 +128,6 @@ class ZPayApp(ctk.CTk):
         self.clear_content()
         balance = self.ledger.get_balance(self.current_user['pub'])
 
-        # Egyenleg kártya
         card = ctk.CTkFrame(self.content_area, fg_color="#2B2B2B", corner_radius=15)
         card.pack(fill="x", pady=10)
 
@@ -133,20 +135,25 @@ class ZPayApp(ctk.CTk):
         ctk.CTkLabel(card, text=f"{balance:,.2f} ZCOIN", font=("Arial", 48, "bold"), text_color="#3B8ED0").pack(
             pady=(5, 25))
 
-        # Cím másolása szekció
         addr_box = ctk.CTkFrame(self.content_area, fg_color="#1E1E1E", height=60)
         addr_box.pack(fill="x", pady=20)
 
         full_addr = self.current_user['pub']
-        ctk.CTkLabel(addr_box, text=f"Saját publikus cím:  {full_addr[:35]}...", font=("Consolas", 13)).pack(
-            side="left", padx=20, pady=15)
+        ctk.CTkLabel(addr_box, text=f"Saját cím:  {full_addr[:35]}...", font=("Consolas", 13)).pack(side="left",
+                                                                                                    padx=20, pady=15)
 
-        def copy():
+        def copy_action():
             pyperclip.copy(full_addr)
             copy_btn.configure(text="Másolva!", fg_color="#2ECC71")
-            self.after(2000, lambda: copy_btn.configure(text="Másolás", fg_color="#3B8ED0"))
 
-        copy_btn = ctk.CTkButton(addr_box, text="Másolás", width=100, command=copy)
+            # BIZTONSÁGOS IDŐZÍTŐ: Ellenőrizzük, létezik-e még a gomb (logout után pl nem)
+            def reset_button():
+                if copy_btn.winfo_exists():
+                    copy_btn.configure(text="Másolás", fg_color="#3B8ED0")
+
+            self.after(2000, reset_button)
+
+        copy_btn = ctk.CTkButton(addr_box, text="Másolás", width=100, command=copy_action)
         copy_btn.pack(side="right", padx=10)
 
     def draw_send(self):
@@ -154,13 +161,11 @@ class ZPayApp(ctk.CTk):
         ctk.CTkLabel(self.content_area, text="Tranzakció indítása", font=("Arial", 24, "bold")).pack(pady=(0, 30),
                                                                                                      anchor="w")
 
-        ctk.CTkLabel(self.content_area, text="Fogadó címe", font=("Arial", 13)).pack(anchor="w", padx=5)
-        target_input = ctk.CTkEntry(self.content_area, placeholder_text="0x...", width=500, height=40)
-        target_input.pack(pady=(5, 20), anchor="w")
+        target_input = ctk.CTkEntry(self.content_area, placeholder_text="Fogadó címe (0x...)", width=500, height=40)
+        target_input.pack(pady=5, anchor="w")
 
-        ctk.CTkLabel(self.content_area, text="Összeg", font=("Arial", 13)).pack(anchor="w", padx=5)
         amount_input = ctk.CTkEntry(self.content_area, placeholder_text="0.00", width=200, height=40)
-        amount_input.pack(pady=(5, 30), anchor="w")
+        amount_input.pack(pady=10, anchor="w")
 
         info_label = ctk.CTkLabel(self.content_area, text="")
         info_label.pack(anchor="w")
@@ -169,26 +174,16 @@ class ZPayApp(ctk.CTk):
             try:
                 amt = float(amount_input.get())
                 target = target_input.get()
-
-                # Digitális aláírás készítése (Zero Knowledge: a jelszó már nincs meg, csak a feloldott kulcs)
                 msg = f"{self.current_user['pub']}-{target}-{amt}"
                 signature = CryptoEngine.sign_transaction(self.current_user['priv'], msg)
 
-                success, response = self.ledger.add_transaction(
-                    self.current_user['pub'], target, amt, signature
-                )
-
-                if success:
-                    info_label.configure(text=response, text_color="#2ECC71")
-                    target_input.delete(0, 'end')
-                    amount_input.delete(0, 'end')
-                else:
-                    info_label.configure(text=response, text_color="#E74C3C")
+                success, response = self.ledger.add_transaction(self.current_user['pub'], target, amt, signature)
+                info_label.configure(text=response, text_color="#2ECC71" if success else "#E74C3C")
             except ValueError:
-                info_label.configure(text="Hiba: Érvénytelen összeg formátum!", text_color="#E74C3C")
+                info_label.configure(text="Hiba: Érvénytelen összeg!", text_color="#E74C3C")
 
-        ctk.CTkButton(self.content_area, text="Küldés megerősítése", command=initiate_transfer, width=250, height=45,
-                      fg_color="#2ECC71", hover_color="#27AE60").pack(pady=10, anchor="w")
+        ctk.CTkButton(self.content_area, text="Küldés megerősítése", command=initiate_transfer,
+                      fg_color="#2ECC71").pack(pady=20, anchor="w")
 
     def draw_history(self):
         self.clear_content()
@@ -199,39 +194,29 @@ class ZPayApp(ctk.CTk):
         scroll.pack(fill="both", expand=True)
 
         history = self.ledger.get_history(self.current_user['pub'])
-
-        if not history:
-            ctk.CTkLabel(scroll, text="Még nincsenek tranzakciók.", text_color="gray").pack(pady=20)
-            return
-
         for tx in history:
             is_in = tx['receiver'] == self.current_user['pub']
             color = "#2ECC71" if is_in else "#E74C3C"
-
             f = ctk.CTkFrame(scroll, fg_color="#252525", height=60)
-            f.pack(fill="x", pady=3, padx=5)
-
-            # Bal oldal: Típus és dátum
-            ctk.CTkLabel(f, text="⬤", text_color=color, font=("Arial", 10)).pack(side="left", padx=(15, 5))
-            ctk.CTkLabel(f, text=f"{tx['date_str']}", font=("Arial", 11), text_color="gray").pack(side="left", padx=10)
-
-            # Közép: Partner címe
-            partner = tx['sender'] if is_in else tx['receiver']
-            ctk.CTkLabel(f, text=f"{'Kitől:' if is_in else 'Neki:'} {partner[:12]}...", font=("Consolas", 12)).pack(
-                side="left", padx=20)
-
-            # Jobb oldal: Összeg
-            amount_text = f"{'+' if is_in else '-'}{tx['amount']} ZCOIN"
-            ctk.CTkLabel(f, text=amount_text, font=("Arial", 14, "bold"), text_color=color).pack(side="right", padx=20)
+            f.pack(fill="x", pady=2, padx=5)
+            ctk.CTkLabel(f, text=f"{tx['date_str']}", font=("Arial", 11), text_color="gray").pack(side="left", padx=15)
+            ctk.CTkLabel(f, text=f"{'+' if is_in else '-'}{tx['amount']} ZCOIN", font=("Arial", 14, "bold"),
+                         text_color=color).pack(side="right", padx=20)
 
     def logout(self):
+        """Biztonságos kijelentkezés és felület-visszaállítás."""
         self.current_user = None
-        for widget in self.winfo_children():
-            widget.destroy()
-        self.__init__()
+        self.setup_initial_view()
 
     def clear_content(self):
-        for widget in self.content_area.winfo_children():
+        """Csak a belső tartalmi területet törli."""
+        if self.content_area and self.content_area.winfo_exists():
+            for widget in self.content_area.winfo_children():
+                widget.destroy()
+
+    def clear_all_widgets(self):
+        """Teljesen kitakarítja az ablakot az új nézethez."""
+        for widget in self.winfo_children():
             widget.destroy()
 
 

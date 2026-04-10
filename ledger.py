@@ -1,26 +1,27 @@
 import json
 import os
 import time
+import hashlib
 from datetime import datetime
 
-# A közös adatbázis fájl neve, amely a "hálózatot" szimulálja
+# A globális főkönyv fájlneve, amely a közös hálózatot szimulálja
 LEDGER_FILE = "global_ledger.json"
 
 
 class Ledger:
     """
-    A Ledger osztály felelős a tranzakciók tárolásáért, az egyenlegek
-    kiszámításáért és a tranzakciók hitelesítéséért.
+    A Ledger osztály felelős a tranzakciók hitelesítéséért és tárolásáért.
+    Ez szimulálja a decentralizált hálózatot egy közös JSON fájlon keresztül.
     """
 
     def __init__(self):
-        """Inicializáláskor ellenőrzi, létezik-e a főkönyv. Ha nem, létrehozza."""
+        """Inicializálja a főkönyvet, ha még nem létezik."""
         if not os.path.exists(LEDGER_FILE):
             with open(LEDGER_FILE, "w") as f:
                 json.dump([], f)
 
     def get_all_transactions(self):
-        """Beolvassa az összes tranzakciót a fájlból."""
+        """Beolvassa az összes tranzakciót a globális adatbázisból."""
         try:
             if not os.path.exists(LEDGER_FILE):
                 return []
@@ -31,72 +32,72 @@ class Ledger:
 
     def get_balance(self, address):
         """
-        Kiszámolja egy adott cím egyenlegét.
-        Minden új tárca 1000 ZCOIN "ajándék" egyenleggel indul a gyakorláshoz.
+        Kiszámolja egy adott 0x... cím aktuális egyenlegét.
+        Minden új cím automatikusan 1000.0 ZCOIN-nal indul a gyakorláshoz.
         """
-        balance = 1000.0  # Kezdőegyenleg (Genesis)
+        balance = 1000.0  # Kezdő egyenleg (Genesis bonus)
         transactions = self.get_all_transactions()
 
         for tx in transactions:
-            if tx['sender'] == address:
+            if tx['sender_addr'] == address:
                 balance -= tx['amount']
-            if tx['receiver'] == address:
+            if tx['receiver_addr'] == address:
                 balance += tx['amount']
 
         return balance
 
     def get_history(self, address):
         """
-        Visszaadja a megadott címhez tartozó összes tranzakciót.
-        Időrendben csökkenő sorrendbe rendezi (legújabb elöl).
+        Lekéri egy adott címhez tartozó összes tranzakciót.
+        A listát a legfrissebbtől a legrégebbi felé rendezi.
         """
         all_tx = self.get_all_transactions()
-        # Szűrés: csak azok a tranzakciók, ahol a cím küldő vagy fogadó
-        history = [tx for tx in all_tx if tx['sender'] == address or tx['receiver'] == address]
+        history = [tx for tx in all_tx if tx['sender_addr'] == address or tx['receiver_addr'] == address]
 
-        # Rendezés timestamp (időbélyeg) szerint csökkenő sorrendbe
+        # Rendezés timestamp szerint csökkenő sorrendbe
         return sorted(history, key=lambda x: x['timestamp'], reverse=True)
 
-    def add_transaction(self, sender_pub, receiver_pub, amount, signature):
+    def add_transaction(self, sender_pub, sender_addr, receiver_addr, amount, signature):
         """
-        Új tranzakció hozzáadása a hálózathoz.
-        Folyamat:
-        1. Aláírás ellenőrzése
-        2. Egyenleg ellenőrzése
-        3. Mentés
+        Validál és rögzít egy új tranzakciót a hálózaton.
         """
-        from engine import CryptoEngine  # Lokális import a körkörös hivatkozás elkerülésére
+        from engine import CryptoEngine  # Körkörös import elkerülése
 
-        # 1. Aláírás ellenőrzése (Matematikai bizonyíték, hogy a küldő indította)
-        # Az üzenet formátuma ugyanaz kell legyen, mint amit a küldő aláírt
-        msg = f"{sender_pub}-{receiver_pub}-{amount}"
+        # 1. Alapvető ellenőrzések
+        if amount <= 0:
+            return False, "Hiba: Az összegnek pozitívnak kell lennie!"
+
+        if sender_addr == receiver_addr:
+            return False, "Hiba: Önmagának nem utalhat!"
+
+        # 2. Aláírás ellenőrzése (Zero Knowledge bizonyíték)
+        # Az aláírandó üzenetnek pontosan egyeznie kell a küldő által aláírttal
+        msg = f"{sender_addr}-{receiver_addr}-{amount}"
         if not CryptoEngine.verify_signature(sender_pub, msg, signature):
             return False, "Hiba: Érvénytelen digitális aláírás!"
 
-        # 2. Összeg érvényességének ellenőrzése
-        if amount <= 0:
-            return False, "Hiba: Az összegnek nagyobbnak kell lennie nullánál!"
+        # 3. Fedezet ellenőrzése
+        if self.get_balance(sender_addr) < amount:
+            return False, "Hiba: Nincs elegendő fedezet a tranzakcióhoz!"
 
-        # 3. Saját magának nem utalhat
-        if sender_pub == receiver_pub:
-            return False, "Hiba: Önmagának nem küldhet pénzt!"
+        # 4. Egyedi Transaction ID (TXID) generálása (Hash)
+        # A hash alapja az üzenet, az időbélyeg és az aláírás egy része
+        raw_id_str = f"{msg}{time.time()}{signature[:10]}"
+        tx_hash = hashlib.sha256(raw_id_str.encode()).hexdigest()
+        tx_id = f"0x{tx_hash[:16]}"  # Rövidített hash a szebb megjelenítéshez
 
-        # 4. Fedezet ellenőrzése
-        current_balance = self.get_balance(sender_pub)
-        if current_balance < amount:
-            return False, f"Hiba: Nincs elég fedezet! (Aktuális: {current_balance})"
-
-        # 5. Tranzakció összeállítása
+        # 5. Tranzakciós objektum összeállítása
         tx = {
-            "sender": sender_pub,
-            "receiver": receiver_pub,
+            "tx_id": tx_id,
+            "sender_addr": sender_addr,
+            "receiver_addr": receiver_addr,
             "amount": amount,
-            "signature": signature,
             "timestamp": time.time(),
-            "date_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "date": datetime.now().strftime("%H:%M:%S | %Y.%m.%d"),
+            "status": "Confirmed"
         }
 
-        # 6. Mentés a fájlba
+        # 6. Írás a fájlba (Atomic-like művelet szimulálása)
         try:
             all_tx = self.get_all_transactions()
             all_tx.append(tx)
@@ -104,6 +105,6 @@ class Ledger:
             with open(LEDGER_FILE, "w") as f:
                 json.dump(all_tx, f, indent=4)
 
-            return True, "Sikeres tranzakció elküldve a hálózatra!"
+            return True, f"Sikeres tranzakció! ID: {tx_id}"
         except Exception as e:
             return False, f"Rendszerhiba a mentés során: {str(e)}"

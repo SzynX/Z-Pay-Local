@@ -1,1 +1,11 @@
-[]
+[
+    {
+        "tx_id": "0x7e89985103a4c2dd",
+        "sender_addr": "0xfafd06b0eaa9eaa7ba5e4cb35bba0f0c8c4724af",
+        "receiver_addr": "0x21e5910a553f083970e5813a3ef0d31bd287982f",
+        "amount": 5.0,
+        "timestamp": 1775834242.6502812,
+        "date": "17:17:22 | 2026.04.10",
+        "status": "Confirmed"
+    }
+]

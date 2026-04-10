@@ -1,0 +1,16 @@
+{
+    "accounts": [
+        {
+            "name": "SzynX",
+            "address": "0xfafd06b0eaa9eaa7ba5e4cb35bba0f0c8c4724af",
+            "pub": "c5eb16da158ecb0e0331e5c1fe4a2872647a8ed2f4f48e42e0bc9b4b525d8c879a7746dc917ed2d4bb72be7a9ccb2eb551de051da97a2101496f4864fe5acf0a",
+            "vault": "LoR2jsJfEIytdqACmjKc7GdBQUFBQUJwMlJRQTZWTXUyQVpSY0txVkxnY1dGYXRUaFVxVWhSUnVORHZIMWZreW1IaWtGU1owQ3lOak5wRGQ4Q2JsTnlyWFJNQVd1NlN0S2FSdnZjU0tWcjhfTWtta0hWVC13Vy1HdUkzWVoteUZZWm80eVdJNDZvNGFBSGZrX0RWcWRUSVJVTmZCVDVuR1N0MUdrMmN0TUNWTDItdUpad0hGMXJsaU8zRk93QkV0Rl9ldEVyVT0="
+        },
+        {
+            "name": "gyurka",
+            "address": "0x21e5910a553f083970e5813a3ef0d31bd287982f",
+            "pub": "7f9e2fba5f695586500497e3a4c511802b4fbf267322f989021d3e47539c62dac6b9b4d51238d7113e845c887739ac56d142cc8cdc671b60678a5bf7914c4d01",
+            "vault": "sr6F7o0zOyYQR9mTN71YB2dBQUFBQUJwMlJSekJqeGJXelRoX0dwS1NQWFdNR2w2bkRjRFB3U2x2OVc1MzFZQmxjS253NFk0TzdyMnk1aU9URE1ra2hacDBPb0NQZlN4RndXWkRqWWNvTDRiVUpMNzNJOGNXekNEcno4TkdYQ251THFqMzBrdWhxNmZ6TXB2Mkk4RHRGZlJLZDBBc2N1aEJoSEM4MW9LUW9CMHp0Ql9qNFdwdHZZODRLU0tlUzJod0tLMTBOUT0="
+        }
+    ]
+}
